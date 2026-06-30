@@ -108,7 +108,6 @@ func (oc *OrderConsumer) ProcessOrders() error {
 }
 
 func processOrder(order Order) Order {
-	log.Printf("Обрабатываю заказ %s", order.ID)
 	order.Status = "processed"
 	time.Sleep(500 * time.Millisecond)
 	return order

@@ -79,8 +79,6 @@ func (oc *OrderConsumer) ProcessOrders() error {
 				continue
 			}
 
-			log.Printf("Обрабатываю заказ %s", order.ID)
-
 			// Обрабатываем заказ
 			processOrder(order)
 		}
