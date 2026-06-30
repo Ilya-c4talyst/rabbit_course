@@ -67,7 +67,7 @@ func (oc *OrderConsumer) ProcessOrders() error {
 	msgs, err := oc.channel.Consume(
 		q.Name,
 		"",
-		true, // auto-ack включён
+		false, // auto-ack выключен: подтверждаем сообщения вручную
 		false,
 		false,
 		false,
@@ -88,18 +88,29 @@ func (oc *OrderConsumer) ProcessOrders() error {
 			err := json.Unmarshal(d.Body, &order)
 			if err != nil {
 				log.Printf("Ошибка парсинга JSON: %v", err)
+				if nackErr := d.Nack(false, true); nackErr != nil {
+					log.Printf("Ошибка NACK: %v", nackErr)
+				}
 				continue
 			}
 
 			log.Printf("Обрабатываю заказ %s", order.ID)
 
 			// Обрабатываем заказ
-			order = processOrder(order)
-			err = oc.SendOrder(order)
+			err = processOrder(&order)
 			if err != nil {
-				log.Printf("Ошибка отправки обработанного заказа: %v", err)
-				return
+				log.Printf("Ошибка обработки: %v", err)
+				if nackErr := d.Nack(false, true); nackErr != nil {
+					log.Printf("Ошибка NACK: %v", nackErr)
+				}
+				continue
 			}
+
+			if ackErr := d.Ack(false); ackErr != nil {
+				log.Printf("Ошибка ACK: %v", ackErr)
+				continue
+			}
+			log.Printf("Заказ %s обработан и подтверждён", order.ID)
 		}
 	}()
 
@@ -107,43 +118,10 @@ func (oc *OrderConsumer) ProcessOrders() error {
 	return nil
 }
 
-func processOrder(order Order) Order {
+func processOrder(order *Order) error {
 	order.Status = "processed"
 	time.Sleep(500 * time.Millisecond)
-	return order
-}
-
-func (op *OrderConsumer) SendOrder(order Order) error {
-	// Конвертируем структуру Order в JSON
-	body, err := json.Marshal(order)
-	if err != nil {
-		return err
-	}
-
-	q, err := op.channel.QueueDeclare(
-		"processed_orders",
-		false,
-		false,
-		false,
-		false,
-		nil,
-	)
-	if err != nil {
-		return err
-	}
-
-	// Отправляем JSON в очередь
-	err = op.channel.Publish("", q.Name, false, false,
-		amqp.Publishing{
-			ContentType: "application/json",
-			Body:        body,
-		})
-
-	if err != nil {
-		return err
-	}
-
-	log.Printf("Заказ %s отправлен в очередь 3", order.ID)
+	log.Printf("Обрабатан заказ %s. Статус %s", order.ID, order.Status)
 	return nil
 }
 
