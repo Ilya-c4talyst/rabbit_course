@@ -47,12 +47,12 @@ func NewOrderProducer() (*OrderProducer, error) {
 	}
 
 	q, err := ch.QueueDeclare(
-		"orders", // Имя очереди для заказов
-		false,
-		false,
-		false,
-		false,
-		nil,
+		"orders",
+		true,  // durable = true - очередь переживёт перезапуск брокера
+		false, // delete when unused
+		false, // exclusive
+		false, // no-wait
+		nil,   // arguments
 	)
 	if err != nil {
 		return nil, err
@@ -79,8 +79,9 @@ func (op *OrderProducer) SendOrder(order Order) error {
 		false,
 		false,
 		amqp.Publishing{
-			ContentType: "application/json", // Указываем тип контента
-			Body:        body,
+			ContentType:  "application/json", // Указываем тип контента
+			DeliveryMode: amqp.Persistent,    // Сообщение переживёт перезапуск RabbitMQ
+			Body:         body,
 		})
 
 	if err != nil {
